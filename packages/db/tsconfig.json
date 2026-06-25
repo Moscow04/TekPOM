@@ -1,0 +1,9 @@
+{
+  "extends": "@tektariq/config/tsconfig-base",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "declaration": true
+  },
+  "include": ["src/**/*"]
+}

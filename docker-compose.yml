@@ -1,0 +1,114 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tektariq-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tektariq_pm
+      POSTGRES_USER: tektariq
+      POSTGRES_PASSWORD: 16-10Ac030
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tektariq -d tektariq_pm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: tektariq-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      args:
+        DATABASE_URL: postgresql://tektariq:16-10Ac030@postgres:5432/tektariq_pm?schema=public
+    container_name: tektariq-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://tektariq:16-10Ac030@postgres:5432/tektariq_pm?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-production-min-32-chars-long}
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      WEB_URL: http://localhost:3000
+      NODE_ENV: production
+      PORT: 4000
+    ports:
+      - "4000:4000"
+    command: >
+      sh -c "npx prisma generate --schema=/app/packages/db/prisma/schema.prisma
+      && npx prisma db push --schema=/app/packages/db/prisma/schema.prisma --accept-data-loss
+      && cd /app/apps/api && node dist/main.js"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: tektariq-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
+      NEXT_TELEMETRY_DISABLED: 1
+    ports:
+      - "3000:3000"
+    command: >
+      sh -c "cd /app/apps/web && node server.js"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: tektariq-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://tektariq:16-10Ac030@postgres:5432/tektariq_pm?schema=public
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+    command: >
+      sh -c "cd /app/apps/worker && node dist/index.js"
+
+  # Optional: MinIO for S3-compatible file storage
+  minio:
+    image: minio/minio:latest
+    container_name: tektariq-storage
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+
+volumes:
+  postgres_data:
+  minio_data:

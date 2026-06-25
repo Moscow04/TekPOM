@@ -1,0 +1,9 @@
+{
+  "name": "@tektariq/config",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    "./eslint-preset": "./eslint-preset.js",
+    "./tsconfig-base": "./tsconfig-base.json"
+  }
+}

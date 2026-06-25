@@ -1,0 +1,41 @@
+FROM node:20-alpine AS base
+RUN apk add --no-cache libc6-compat openssl
+RUN npm install -g pnpm@9.15.4
+WORKDIR /app
+
+FROM base AS deps
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc turbo.json ./
+COPY apps/api/package.json apps/api/
+COPY apps/worker/package.json apps/worker/
+COPY packages/db/package.json packages/db/
+COPY packages/shared/package.json packages/shared/
+COPY packages/policy/package.json packages/policy/
+COPY packages/config/package.json packages/config/
+RUN pnpm install --frozen-lockfile
+
+FROM base AS builder
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules
+COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=deps /app/packages/policy/node_modules ./packages/policy/node_modules
+COPY . .
+RUN pnpm --filter @tektariq/config build 2>/dev/null || true
+RUN pnpm --filter @tektariq/shared build
+RUN pnpm --filter @tektariq/policy build
+RUN pnpm --filter @tektariq/db generate
+RUN pnpm --filter @tektariq/api build
+
+FROM base AS runner
+COPY --from=builder /app/packages/db/prisma ./packages/db/prisma
+COPY --from=builder /app/packages/db/dist ./packages/db/dist
+COPY --from=builder /app/packages/db/node_modules/.prisma ./packages/db/node_modules/.prisma
+COPY --from=builder /app/packages/db/node_modules/@prisma ./packages/db/node_modules/@prisma
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/policy/dist ./packages/policy/dist
+COPY --from=builder /app/apps/api/dist ./apps/api/dist
+COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+
+EXPOSE 4000
+CMD ["node", "apps/api/dist/main.js"]

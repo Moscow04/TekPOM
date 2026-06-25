@@ -1,0 +1,10 @@
+{
+  "extends": "@tektariq/config/tsconfig-base",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "module": "commonjs",
+    "moduleResolution": "node"
+  },
+  "include": ["src/**/*"]
+}

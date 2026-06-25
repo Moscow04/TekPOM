@@ -1,0 +1,646 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleName {
+  CEO
+  SUPER_ADMIN
+  CPO
+  PRODUCT_MANAGER
+  PRODUCT_DESIGNER
+  PRODUCT_DESIGN_TEAM_LEAD
+  CTO
+  ENG_TEAM_LEAD_FRONTEND
+  ENG_TEAM_LEAD_BACKEND
+  ENG_TEAM_LEAD_CLOUD_DEVOPS
+  ENG_TEAM_LEAD_QA
+  FRONTEND_DEVELOPER
+  BACKEND_DEVELOPER
+  CLOUD_DEVOPS_ENGINEER
+  QA_ENGINEER
+  CBO
+  BRAND_TEAM_LEAD
+  BRAND_DESIGNER
+  GRAPHICS_DESIGNER
+  MOTION_DESIGNER
+  COO
+  BA_TEAM_LEAD
+  DATA_ANALYST
+  BUSINESS_ANALYST
+  CAB_MEMBER
+  PRODUCT_OWNER
+}
+
+enum Module {
+  PRODUCT
+  ENGINEERING
+  BRAND
+  BUSINESS_ANALYSIS
+}
+
+enum EngineeringDiscipline {
+  FRONTEND
+  BACKEND
+  CLOUD_DEVOPS
+  QA
+}
+
+enum TaskStatus {
+  DRAFT
+  ASSIGNED
+  IN_PROGRESS
+  SUBMITTED_FOR_REVIEW
+  LEAD_APPROVED
+  CPO_APPROVED
+  CTO_APPROVED
+  CBO_APPROVED
+  COO_APPROVED
+  DONE
+  REJECTED
+  REWORK
+  BACKLOG
+  READY_FOR_REVIEW
+  REWORK_REQUESTED
+  REOPENED
+}
+
+enum ApprovalLevel {
+  LEAD
+  CHIEF
+}
+
+enum ApprovalDecision {
+  APPROVED
+  REJECTED
+  REWORK_REQUESTED
+}
+
+enum DependencyType {
+  BLOCKS
+  RELATES_TO
+}
+
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum ChangeRequestType {
+  SCOPE
+  TIMELINE
+  BUDGET
+  RESOURCE
+}
+
+enum ChangeRequestStatus {
+  OPEN
+  IN_REVIEW
+  APPROVED
+  APPROVED_WITH_CONDITIONS
+  REJECTED
+  DEFERRED
+}
+
+enum CABVoteValue {
+  APPROVE
+  REJECT
+  ABSTAIN
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SLACK
+}
+
+enum NotificationEventType {
+  TASK_ASSIGNED
+  TASK_STATUS_CHANGE
+  APPROVAL_REQUESTED
+  APPROVED
+  REJECTED
+  DEADLINE_APPROACHING
+  CAB_DECISION_PUBLISHED
+  MENTIONED
+  PROJECT_ADDED
+  LOAN_REQUEST_SUBMITTED
+  LOAN_REQUEST_APPROVED
+  LOAN_REQUEST_REJECTED
+  ASSET_PUBLISHED
+  COMMENT_ADDED
+}
+
+enum AttachmentScanStatus {
+  PENDING
+  CLEAN
+  QUARANTINED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  roles             UserRole[]
+  projectMembers    ProjectMember[]
+  assignedTasks     Task[]             @relation("TaskAssignee")
+  approvals         TaskApproval[]
+  comments          Comment[]
+  auditLogs         AuditLog[]
+  notifications     Notification[]
+  notificationPrefs NotificationPreference[]
+  raisedRequests    ChangeRequest[]    @relation("ChangeRequestRaisedBy")
+  cabVotes          CABVote[]
+  uploads           Attachment[]
+  connectedIntgs    Integration[]
+  createdApiKeys    ApiKey[]
+  cabChairMeetings  CABMeeting[]
+
+  @@map("users")
+}
+
+model Role {
+  id         String   @id @default(cuid())
+  name       RoleName @unique
+  department String?
+
+  users         UserRole[]
+  reportingLine ReportingLine[] @relation("ReportingLineRole")
+  reportsTo     ReportingLine[] @relation("ReportingLineReportsTo")
+
+  @@map("roles")
+}
+
+model UserRole {
+  id     String @id @default(cuid())
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model Department {
+  id           String @id @default(cuid())
+  name         String @unique
+  chiefRoleId  String
+
+  chiefRole Role @relation(fields: [chiefRoleId], references: [id])
+  roles     Role[]
+
+  @@map("departments")
+}
+
+model ReportingLine {
+  id              String   @id @default(cuid())
+  roleId          String
+  reportsToRoleId String
+
+  role     Role @relation("ReportingLineRole", fields: [roleId], references: [id], onDelete: Cascade)
+  reportsTo Role @relation("ReportingLineReportsTo", fields: [reportsToRoleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, reportsToRoleId])
+  @@map("reporting_lines")
+}
+
+model Project {
+  id              String        @id @default(cuid())
+  name            String
+  status          ProjectStatus @default(DRAFT)
+  productOwnerId  String
+  templateId      String?
+  targetStartDate DateTime?
+  targetEndDate   DateTime?
+  budgetCents     Int?
+  description     String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  productOwner        User              @relation(fields: [productOwnerId], references: [id])
+  template            ProjectTemplate?  @relation(fields: [templateId], references: [id])
+  members             ProjectMember[]
+  tasks               Task[]
+  changeRequests      ChangeRequest[]
+  portfolioSnapshots  PortfolioSnapshot[]
+  risks               Risk[]
+  milestones          Milestone[]
+
+  @@map("projects")
+}
+
+model ProjectTemplate {
+  id               String   @id @default(cuid())
+  name             String   @unique
+  defaultMilestones Json?
+  defaultRoles     Json?
+  createdAt        DateTime @default(now())
+
+  projects Project[]
+
+  @@map("project_templates")
+}
+
+model ProjectMember {
+  id            String   @id @default(cuid())
+  projectId     String
+  userId        String
+  role          RoleName
+  isLoan        Boolean  @default(false)
+  allocationPct Int      @default(100)
+  startDate     DateTime @default(now())
+  endDate       DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId, role])
+  @@map("project_members")
+}
+
+model Task {
+  id          String             @id @default(cuid())
+  projectId   String
+  module      Module
+  discipline  EngineeringDiscipline?
+  title       String
+  description String?
+  status      TaskStatus
+  assigneeId  String?
+  dueDate     DateTime?
+  branchUrl   String?
+  prUrl       String?
+  commitSha   String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee User?   @relation("TaskAssignee", fields: [assigneeId], references: [id])
+
+  assignments        TaskAssignment[]
+  approvals          TaskApproval[]
+  taskDependencies   TaskDependency[]  @relation("TaskDependencyTask")
+  dependsOn          TaskDependency[]  @relation("TaskDependencyDependsOn")
+  comments           Comment[]
+  attachments        Attachment[]
+  bugs               Bug[]
+  deliverables       Deliverable[]
+  linkedChangeRequest ChangeRequest?
+
+  @@index([projectId, status])
+  @@index([assigneeId])
+  @@map("tasks")
+}
+
+model TaskAssignment {
+  id            String   @id @default(cuid())
+  taskId        String
+  userId        String
+  assignedById  String
+  assignedAt    DateTime @default(now())
+
+  task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user     User @relation(fields: [userId], references: [id])
+  assignedBy User @relation(fields: [assignedById], references: [id])
+
+  @@index([taskId])
+  @@map("task_assignments")
+}
+
+model TaskApproval {
+  id         String           @id @default(cuid())
+  taskId     String
+  approverId String
+  level      ApprovalLevel
+  decision   ApprovalDecision
+  comment    String?
+  decidedAt  DateTime         @default(now())
+
+  task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  approver User @relation(fields: [approverId], references: [id])
+
+  @@index([taskId])
+  @@map("task_approvals")
+}
+
+model TaskDependency {
+  id              String         @id @default(cuid())
+  taskId          String
+  dependsOnTaskId String
+  type            DependencyType
+
+  task      Task @relation("TaskDependencyTask", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn Task @relation("TaskDependencyDependsOn", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnTaskId])
+  @@map("task_dependencies")
+}
+
+model Bug {
+  id          String   @id @default(cuid())
+  taskId      String
+  title       String
+  description String?
+  severity    String   @default("medium")
+  reproSteps  String?
+  reportedById String?
+  createdAt   DateTime @default(now())
+
+  task      Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  reportedBy User? @relation(fields: [reportedById], references: [id])
+
+  @@map("bugs")
+}
+
+model Asset {
+  id        String   @id @default(cuid())
+  taskId    String?
+  projectId String?
+  title     String
+  type      String
+  fileUrl   String?
+  version   Int      @default(1)
+  isFinal   Boolean  @default(false)
+  approvedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task    Task?    @relation(fields: [taskId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id])
+
+  @@map("assets")
+}
+
+model Deliverable {
+  id           String @id @default(cuid())
+  taskId       String
+  projectId    String
+  type         String
+  fileUrl      String?
+  externalLink String?
+  title        String
+
+  task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@map("deliverables")
+}
+
+model LoanRequest {
+  id            String   @id @default(cuid())
+  analystId     String
+  fromProjectId String?
+  toProjectId   String
+  status        String   @default("PENDING")
+  approvedBy    String?
+  requestedBy   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("loan_requests")
+}
+
+model Risk {
+  id          String   @id @default(cuid())
+  projectId   String
+  title       String
+  severity    String   @default("medium")
+  description String?
+  ownerId     String?
+  mitigation  String?
+  status      String   @default("OPEN")
+  tag         String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("risks")
+}
+
+model Milestone {
+  id        String   @id @default(cuid())
+  projectId String
+  title     String
+  dueDate   DateTime?
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("milestones")
+}
+
+model Comment {
+  id              String   @id @default(cuid())
+  parentType      String
+  parentId        String
+  authorId        String
+  body            String
+  mentionedUserIds Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  author User @relation(fields: [authorId], references: [id])
+
+  @@index([parentType, parentId])
+  @@map("comments")
+}
+
+model Attachment {
+  id              String                @id @default(cuid())
+  parentType      String
+  parentId        String
+  fileUrl         String
+  fileType        String
+  scanStatus      AttachmentScanStatus  @default(PENDING)
+  uploadedById    String
+  createdAt       DateTime              @default(now())
+
+  uploader User @relation(fields: [uploadedById], references: [id])
+
+  @@index([parentType, parentId])
+  @@map("attachments")
+}
+
+model ChangeRequest {
+  id             String              @id @default(cuid())
+  projectId      String
+  raisedById     String
+  type           ChangeRequestType
+  description    String
+  impactSummary  String?
+  status         ChangeRequestStatus @default(OPEN)
+  targetStartDate DateTime?
+  targetEndDate  DateTime?
+  budgetDelta    Int?
+  resourceDelta  String?
+  linkedTaskId   String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  raisedBy User    @relation("ChangeRequestRaisedBy", fields: [raisedById], references: [id])
+  linkedTask Task? @relation(fields: [linkedTaskId], references: [id])
+
+  decisions CABDecision[]
+
+  @@map("change_requests")
+}
+
+model CABMeeting {
+  id            String   @id @default(cuid())
+  date          DateTime
+  chairUserId   String
+  attendeeIds   Json?
+  createdAt     DateTime @default(now())
+
+  chair    User          @relation(fields: [chairUserId], references: [id])
+  decisions CABDecision[]
+
+  @@index([date])
+  @@map("cab_meetings")
+}
+
+model CABDecision {
+  id                  String   @id @default(cuid())
+  changeRequestId     String   @unique
+  meetingId           String
+  outcome             ChangeRequestStatus
+  conditionsStructured Json?
+  conditionsText      String?
+  publishedAt          DateTime?
+  correctsDecisionId   String?
+  createdAt           DateTime @default(now())
+
+  changeRequest ChangeRequest @relation(fields: [changeRequestId], references: [id], onDelete: Cascade)
+  meeting       CABMeeting    @relation(fields: [meetingId], references: [id])
+  corrects      CABDecision?  @relation("CABDecisionCorrection", fields: [correctsDecisionId], references: [id])
+  corrections   CABDecision[] @relation("CABDecisionCorrection")
+
+  votes CABVote[]
+
+  @@map("cab_decisions")
+}
+
+model CABVote {
+  id         String       @id @default(cuid())
+  decisionId String
+  meetingId  String
+  voterId    String
+  vote       CABVoteValue
+
+  decision CABDecision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  meeting  CABMeeting  @relation(fields: [meetingId], references: [id])
+  voter    User        @relation(fields: [voterId], references: [id])
+
+  @@unique([decisionId, voterId])
+  @@map("cab_votes")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String
+  entityType String
+  entityId   String
+  oldValue   Json?
+  newValue   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  actor User @relation(fields: [actorId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      NotificationEventType
+  payload   Json?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id              String                @id @default(cuid())
+  userId          String
+  eventType       NotificationEventType
+  channel         NotificationChannel
+  enabled         Boolean               @default(true)
+  quietHoursStart String?
+  quietHoursEnd   String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventType, channel])
+  @@map("notification_preferences")
+}
+
+model PortfolioSnapshot {
+  id                   String   @id @default(cuid())
+  projectId            String
+  date                 DateTime @default(now())
+  velocity             Float    @default(0)
+  budgetBurnPct        Float    @default(0)
+  onTimePct            Float    @default(0)
+  riskScore            Float    @default(0)
+  launchReadinessScore Float    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, date])
+  @@map("portfolio_snapshots")
+}
+
+model Integration {
+  id            String   @id @default(cuid())
+  type          String
+  config        Json?
+  connectedById String
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  connectedBy User     @relation(fields: [connectedById], references: [id])
+  apiKeys     ApiKey[]
+
+  @@map("integrations")
+}
+
+model ApiKey {
+  id            String    @id @default(cuid())
+  integrationId String?
+  name          String
+  hashedKey     String    @unique
+  scopes        Json?
+  createdById   String
+  expiresAt     DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  integration Integration? @relation(fields: [integrationId], references: [id])
+  createdBy   User         @relation(fields: [createdById], references: [id])
+
+  @@map("api_keys")
+}

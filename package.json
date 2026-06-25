@@ -1,0 +1,32 @@
+{
+  "name": "tektariq-pm",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TekTariq PM - Internal Project Management Platform",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "start": "turbo start",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "db:generate": "pnpm --filter @tektariq/db generate",
+    "db:push": "pnpm --filter @tektariq/db push",
+    "db:migrate": "pnpm --filter @tektariq/db migrate",
+    "db:seed": "pnpm --filter @tektariq/db seed",
+    "db:studio": "pnpm --filter @tektariq/db studio",
+    "setup": "pnpm install && pnpm db:generate && pnpm db:push && pnpm db:seed",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:build": "docker compose build",
+    "generate:jwt": "node -e \"const crypto = require('crypto'); console.log(crypto.randomBytes(64).toString('hex'));\""
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "devDependencies": {
+    "@tektariq/config": "workspace:*",
+    "turbo": "^2.3.0"
+  }
+}
