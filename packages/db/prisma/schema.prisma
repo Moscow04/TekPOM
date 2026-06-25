@@ -73,18 +73,15 @@ enum ApprovalLevel {
   LEAD
   CHIEF
 }
-
 enum ApprovalDecision {
   APPROVED
   REJECTED
   REWORK_REQUESTED
 }
-
 enum DependencyType {
   BLOCKS
   RELATES_TO
 }
-
 enum ProjectStatus {
   DRAFT
   ACTIVE
@@ -92,14 +89,12 @@ enum ProjectStatus {
   COMPLETED
   CANCELLED
 }
-
 enum ChangeRequestType {
   SCOPE
   TIMELINE
   BUDGET
   RESOURCE
 }
-
 enum ChangeRequestStatus {
   OPEN
   IN_REVIEW
@@ -108,19 +103,16 @@ enum ChangeRequestStatus {
   REJECTED
   DEFERRED
 }
-
 enum CABVoteValue {
   APPROVE
   REJECT
   ABSTAIN
 }
-
 enum NotificationChannel {
   IN_APP
   EMAIL
   SLACK
 }
-
 enum NotificationEventType {
   TASK_ASSIGNED
   TASK_STATUS_CHANGE
@@ -137,7 +129,6 @@ enum NotificationEventType {
   ASSET_PUBLISHED
   COMMENT_ADDED
 }
-
 enum AttachmentScanStatus {
   PENDING
   CLEAN
@@ -156,15 +147,14 @@ model User {
   roles             UserRole[]
   projectMembers    ProjectMember[]
   assignedTasks     Task[]             @relation("TaskAssignee")
-  approvals         TaskApproval[]
-  comments          Comment[]
+  approvals         TaskApproval[]     @relation("Approver")
+  comments          Comment[]          @relation("CommentAuthor")
   auditLogs         AuditLog[]
   notifications     Notification[]
   notificationPrefs NotificationPreference[]
   raisedRequests    ChangeRequest[]    @relation("ChangeRequestRaisedBy")
   cabVotes          CABVote[]
-  uploads           Attachment[]
-  connectedIntgs    Integration[]
+  uploads           Attachment[]       @relation("Uploader")
   createdApiKeys    ApiKey[]
   cabChairMeetings  CABMeeting[]
 
@@ -196,12 +186,9 @@ model UserRole {
 }
 
 model Department {
-  id           String @id @default(cuid())
-  name         String @unique
-  chiefRoleId  String
-
-  chiefRole Role @relation(fields: [chiefRoleId], references: [id])
-  roles     Role[]
+  id          String @id @default(cuid())
+  name        String @unique
+  chiefRoleId String
 
   @@map("departments")
 }
@@ -231,8 +218,6 @@ model Project {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  productOwner        User              @relation(fields: [productOwnerId], references: [id])
-  template            ProjectTemplate?  @relation(fields: [templateId], references: [id])
   members             ProjectMember[]
   tasks               Task[]
   changeRequests      ChangeRequest[]
@@ -249,8 +234,6 @@ model ProjectTemplate {
   defaultMilestones Json?
   defaultRoles     Json?
   createdAt        DateTime @default(now())
-
-  projects Project[]
 
   @@map("project_templates")
 }
@@ -292,14 +275,12 @@ model Task {
   assignee User?   @relation("TaskAssignee", fields: [assigneeId], references: [id])
 
   assignments        TaskAssignment[]
-  approvals          TaskApproval[]
+  approvals          TaskApproval[]    @relation("TaskApprovals")
   taskDependencies   TaskDependency[]  @relation("TaskDependencyTask")
   dependsOn          TaskDependency[]  @relation("TaskDependencyDependsOn")
-  comments           Comment[]
-  attachments        Attachment[]
   bugs               Bug[]
   deliverables       Deliverable[]
-  linkedChangeRequest ChangeRequest?
+  linkedChangeRequests ChangeRequest[]
 
   @@index([projectId, status])
   @@index([assigneeId])
@@ -313,9 +294,7 @@ model TaskAssignment {
   assignedById  String
   assignedAt    DateTime @default(now())
 
-  task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user     User @relation(fields: [userId], references: [id])
-  assignedBy User @relation(fields: [assignedById], references: [id])
+  task       Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([taskId])
   @@map("task_assignments")
@@ -330,8 +309,8 @@ model TaskApproval {
   comment    String?
   decidedAt  DateTime         @default(now())
 
-  task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  approver User @relation(fields: [approverId], references: [id])
+  task     Task @relation("TaskApprovals", fields: [taskId], references: [id], onDelete: Cascade)
+  approver User @relation("Approver", fields: [approverId], references: [id])
 
   @@index([taskId])
   @@map("task_approvals")
@@ -360,8 +339,7 @@ model Bug {
   reportedById String?
   createdAt   DateTime @default(now())
 
-  task      Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  reportedBy User? @relation(fields: [reportedById], references: [id])
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@map("bugs")
 }
@@ -379,9 +357,6 @@ model Asset {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  task    Task?    @relation(fields: [taskId], references: [id])
-  project Project? @relation(fields: [projectId], references: [id])
-
   @@map("assets")
 }
 
@@ -395,7 +370,6 @@ model Deliverable {
   title        String
 
   task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  project Project @relation(fields: [projectId], references: [id])
 
   @@map("deliverables")
 }
@@ -455,7 +429,7 @@ model Comment {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  author User @relation(fields: [authorId], references: [id])
+  author User @relation("CommentAuthor", fields: [authorId], references: [id])
 
   @@index([parentType, parentId])
   @@map("comments")
@@ -471,7 +445,7 @@ model Attachment {
   uploadedById    String
   createdAt       DateTime              @default(now())
 
-  uploader User @relation(fields: [uploadedById], references: [id])
+  uploader User @relation("Uploader", fields: [uploadedById], references: [id])
 
   @@index([parentType, parentId])
   @@map("attachments")
@@ -489,7 +463,7 @@ model ChangeRequest {
   targetEndDate  DateTime?
   budgetDelta    Int?
   resourceDelta  String?
-  linkedTaskId   String?
+  linkedTaskId   String?             @unique
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
@@ -511,6 +485,7 @@ model CABMeeting {
 
   chair    User          @relation(fields: [chairUserId], references: [id])
   decisions CABDecision[]
+  votes     CABVote[]
 
   @@index([date])
   @@map("cab_meetings")
@@ -622,8 +597,7 @@ model Integration {
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
 
-  connectedBy User     @relation(fields: [connectedById], references: [id])
-  apiKeys     ApiKey[]
+  apiKeys ApiKey[]
 
   @@map("integrations")
 }
