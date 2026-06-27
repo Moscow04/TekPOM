@@ -1,0 +1,22 @@
+{$DOMAIN} {
+    tls {$ACME_EMAIL:off}
+
+    # API reverse proxy
+    handle_path /api/* {
+        reverse_proxy api:4000
+    }
+
+    # MinIO console
+    handle_path /minio-console/* {
+        reverse_proxy minio:9001
+    }
+
+    # Web frontend
+    handle {
+        reverse_proxy web:3000
+    }
+
+    log {
+        output file /data/logs/access.log
+    }
+}

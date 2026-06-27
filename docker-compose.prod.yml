@@ -1,0 +1,43 @@
+services:
+  # Reverse proxy with automatic HTTPS
+  caddy:
+    image: caddy:2-alpine
+    container_name: tektariq-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    depends_on:
+      - web
+      - api
+
+  # Expose web on internal port only (Caddy handles external)
+  web:
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  # Expose api on internal port only
+  api:
+    ports:
+      - "127.0.0.1:4000:4000"
+    environment:
+      WEB_URL: https://${DOMAIN}
+      API_URL: https://${DOMAIN}/api
+      NODE_ENV: production
+
+  # Expose MinIO on internal ports only
+  minio:
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+
+volumes:
+  caddy_data:
+  caddy_config:
