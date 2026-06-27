@@ -30,8 +30,7 @@ RUN pnpm --filter @tektariq/api build
 FROM base AS runner
 COPY --from=builder /app/packages/db/prisma ./packages/db/prisma
 COPY --from=builder /app/packages/db/dist ./packages/db/dist
-COPY --from=builder /app/packages/db/node_modules/.prisma ./packages/db/node_modules/.prisma
-COPY --from=builder /app/packages/db/node_modules/@prisma ./packages/db/node_modules/@prisma
+COPY --from=builder /app/packages/db/node_modules ./packages/db/node_modules
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder /app/packages/policy/dist ./packages/policy/dist
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
