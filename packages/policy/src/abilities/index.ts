@@ -1,7 +1,7 @@
-import { AbilityBuilder, AbilityClass, PureAbility, ExtractSubjectType, InferSubjects } from '@casl/ability';
-import { RoleName, Task, Project, ProjectMember, User } from '@tektariq/db';
+import { AbilityBuilder, AbilityClass, PureAbility } from '@casl/ability';
+import { RoleName } from '@tektariq/db';
 
-type Subjects = InferSubjects<typeof Task | typeof Project | typeof ProjectMember | typeof User> | 'all';
+type Subjects = 'Task' | 'Project' | 'ProjectMember' | 'User' | 'all';
 type Actions = 'create' | 'read' | 'update' | 'delete' | 'manage' | 'approve' | 'assign' | 'vote';
 
 export type AppAbility = PureAbility<[Actions, Subjects]>;
