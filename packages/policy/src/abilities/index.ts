@@ -1,7 +1,7 @@
 import { AbilityBuilder, AbilityClass, PureAbility } from '@casl/ability';
 import { RoleName } from '@tektariq/db';
 
-type Subjects = 'Task' | 'Project' | 'ProjectMember' | 'User' | 'all';
+type Subjects = 'Task' | 'Project' | 'ProjectMember' | 'User' | 'ChangeRequest' | 'CABDecision' | 'all';
 type Actions = 'create' | 'read' | 'update' | 'delete' | 'manage' | 'approve' | 'assign' | 'vote';
 
 export type AppAbility = PureAbility<[Actions, Subjects]>;
