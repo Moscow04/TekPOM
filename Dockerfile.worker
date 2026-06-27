@@ -20,6 +20,7 @@ COPY . .
 RUN pnpm --filter @tektariq/config build 2>/dev/null || true
 RUN pnpm --filter @tektariq/shared build
 RUN pnpm --filter @tektariq/db generate
+RUN pnpm --filter @tektariq/db build
 RUN pnpm --filter @tektariq/worker build
 
 FROM base AS runner
